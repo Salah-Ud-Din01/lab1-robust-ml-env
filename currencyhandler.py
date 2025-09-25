@@ -34,7 +34,7 @@ class CurrencyHandler:
             A dictionary containing the latest exchange rates and metadata.
         """
         # Use this code to fetch currency data from openexchangerates.org.
-        app_id = "YOUR_APP_ID"  # Add your own app_id from openexchangerates.org here
+        app_id = "22127c485fd642da9820bdfddc79eeca"  # Add your own app_id from openexchangerates.org here
         url = f"https://openexchangerates.org/api/latest.json?app_id={app_id}"
         headers = {
             "accept": "application/json"
@@ -81,8 +81,7 @@ class CurrencyHandler:
 
     def list_currencies(self) -> list[str]:
         """
-        List all available currencies in alphabetical order.
-        # BONUS - somehow get the full currency names, and include that as well. Feel free to do it any way you like.
+       self
 
         Returns:
             A sorted list of available currency codes.
