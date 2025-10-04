@@ -1,150 +1,161 @@
+import json
+import os
+import requests
+from datetime import datetime, timedelta
 from typing import Any
 
-import requests
 
 
 class CurrencyHandler:
-    def __init__(self, base_currency: str = "usd"):
-        # You can only use "usd" as base in the API when using free tier.
-        # Feel free to add more parameters if you have ideas on how
-        # the class might benefit from that, making it more customizable.
-        """
-        Initialize the CurrencyHandler.
-
-        This constructor should:
-        1. Attempt to load currency data from a JSON file using the load_currency_data method.
-        2. If no JSON data is found or if it's outdated, fetch new data from the exchangerates API using the fetch_currency_data method.
-        3. Initialize any necessary instance variables for storing currency data and API information.
-
-        # ADVICE: Start implementing the fetch_currency_data method
-        """
-        pass
+    def __init__(self, base_currency: str = "USD"):
+        self.base_currency = base_currency.upper()
+        self.currency_data = {}
+        self.last_updated = None
+        data = self.load_currency_data()
+        if data:
+            self.currency_data = data.get("rates", {})
+            timestamp = data.get("timestamp", 0)
+            self.last_updated = datetime.fromtimestamp(data.get("timestamp"))
+        else:
+            self.fetch_currency_data()
 
     def fetch_currency_data(self) -> dict[str, Any]:
-        """
-        Fetch the latest currency exchange rate data from the openexchangerates API.
-
-        This method should:
-        1. Make an API request to fetch the latest exchange rates.
-        2. Parse the JSON response and extract relevant data.
-        3. Store the fetched data in the appropriate instance variable(s).
-        4. Handle any potential errors or exceptions that may occur during the API request.
-
-        Returns:
-            A dictionary containing the latest exchange rates and metadata.
-        """
-        # Use this code to fetch currency data from openexchangerates.org.
-        app_id = "22127c485fd642da9820bdfddc79eeca"  # Add your own app_id from openexchangerates.org here
+        app_id = "22127c485fd642da9820bdfddc79eeca"                                                                                                                    
         url = f"https://openexchangerates.org/api/latest.json?app_id={app_id}"
-        headers = {
-            "accept": "application/json"
-        }  # This needs to be added, it tells the API that they should return JSON
-        response = requests.get(url, headers=headers)
-        # Implement the rest of the method
-        pass
+        headers = {"accept": "application/json"}
+
+        try:
+            response = requests.get(url, headers=headers)
+            response.raise_for_status()
+            data = response.json()
+            self.currency_data = data.get("rates", {})
+            self.last_updated = datetime.fromtimestamp(data.get("timestamp"))
+
+            return data
+        except requests.RequestException as e:
+            print(f"Error fetching data from API: {e}")
+            return {}
+                
 
     def convert_from_usd(self, to_currency: str, amount: float) -> float:
-        """
-        Convert a given amount from USD to another specified currency.
-        This does not require you to use a "base" in the API, it can be done using basic math.
+        to_currency = to_currency.upper()
 
-        Args:
-            to_currency: The 3-letter code of the currency to convert to.
-            amount: The amount in USD to be converted.
+        if amount < 0:
+            raise ValueError("Amount cannot be negative")
 
-        Returns:
-            The converted amount in the specified currency.
+        if to_currency not in self.currency_data:
+            raise ValueError(f"Currency '{to_currency}' not supported")
 
-        Raises:
-            ValueError: If the currency code is invalid or the amount is negative.
-        """
-        pass
+        rate = self.currency_data[to_currency]
+        converted_amount = amount * rate
+        return converted_amount
 
-    def convert_any_currency(
-        self, from_currency: str, to_currency: str, amount: float
-    ) -> float:
-        """
-        Convert an amount from one currency to another using the latest exchange rates.
+    def convert_any_currency(self, from_currency: str, to_currency: str, amount: float) -> float:
+        from_currency = from_currency.upper()
+        to_currency = to_currency.upper()
 
-        Args:
-            from_currency: The 3-letter code of the currency to convert from.
-            to_currency: The 3-letter code of the currency to convert to.
-            amount: The amount to be converted.
+        if amount < 0:
+            raise ValueError("Amount cannot be negative")
 
-        Returns:
-            The converted amount in the target currency.
+        if from_currency not in self.currency_data or to_currency not in self.currency_data:
+            raise ValueError("One or both currency codes are invalid")
 
-        Raises:
-            ValueError: If either currency code is invalid or the amount is negative.
-        """
-        pass
+        amount_in_usd = amount / self.currency_data[from_currency]
+        return amount_in_usd * self.currency_data[to_currency]
 
+    
     def list_currencies(self) -> list[str]:
-        """
-       self
-
-        Returns:
-            A sorted list of available currency codes.
-        """
-        pass
+        return sorted(self.currency_data.keys())
 
     def load_currency_data(self) -> dict[str, Any]:
-        """
-        Load currency data from a JSON file.
+        if not os.path.isfile("currency_data.json"):
+            return {}
 
-        This method should:
-        1. Check if a JSON file with saved currency data exists.
-        2. If it exists, read and parse the JSON data.
-        3. Check the timestamp of the saved data.
-        4. If the data is older than one hour, call fetch_currency_data to update it.
-        5. If no file exists or there's an error reading it, call fetch_currency_data.
+        try:
+            with open("currency_data.json", "r") as f:
+                data = json.load(f)
 
-        Returns:
-            A dictionary containing the loaded (or fetched) currency data.
-        """
-        pass
+            timestamp = data.get("timestamp", 0)
+            last_update = datetime.fromtimestamp(timestamp)
 
+            if (datetime.now() - last_update).total_seconds() > 3600:
+                return self.fetch_currency_data()
+
+            return data
+        except (IOError, json.JSONDecodeError):
+            return self.fetch_currency_data()
+       
+        
     def export_to_json(self) -> None:
-        """
-        Export the current currency data (for the latest currencies) to a JSON file.
+        try:
+            data = {
+                "rates": self.currency_data,
+                "timestamp": int(datetime.now().timestamp())
+            }
+            with open("currency_data.json", "w") as f:
+                json.dump(data, f, indent=4)
+        except IOError as e:
+            print(f"Failed to export data: {e}")
 
-        This method should:
-        1. Convert the current currency data into a JSON-formatted string.
-        2. Write the JSON data to a file, including the current timestamp.
-        3. Handle potential errors that may occur during file writing.
+    def load_currency_data(self) -> dict[str, Any]:
+        if not os.path.isfile("currency_data.json"):
+            return {}
 
-        Raises:
-            IOError: If there's an error writing to the file, or a custom exception.
-        """
-        pass
+        try:
+            with open("currency_data.json", "r") as f:
+                data = json.load(f)
+
+            timestamp = data.get("timestamp", 0)
+            last_update = datetime.fromtimestamp(timestamp)
+
+            # Check if data is older than 1 hour
+            if (datetime.now() - last_update).total_seconds() > 3600:
+                return self.fetch_currency_data()
+
+            return data
+
+        except (IOError, json.JSONDecodeError):
+            return self.fetch_currency_data()
 
     def get_historical_rate(self, date: str, base_currency: str) -> dict[str, Any]:
-        """
-        Get the historical exchange rate for a specific date using
-        one of the relevant API-endpoints.
+        app_id = "22127c485fd642da9820bdfddc79eeca"
+        url = f"https://openexchangerates.org/api/historical/{date}.json?app_id={app_id}&base={base_currency}"
 
-        Args:
-            date: Date in YYYY-MM-DD format
-            base_currency: 3-letter currency code to fetch historical rates based on
+        try:
+            response = requests.get(url)
+            response.raise_for_status()
+            return response.json().get("rates", {})
+        except requests.RequestException as e:
+            print(f"Error fetching historical data: {e}")
+            return {}
 
-        Returns:
-            The historical exchange rates as a dictionary for a specific date
-            You should probably store it in a list or dict.
-        """
-        pass
+    def list_historical_rates_for_currency(self, currency: str, days: int) -> list[tuple[str, float]]:
+        rates = []
+        for i in range(days):
+            date = (datetime.now() - timedelta(days=i)).strftime("%Y-%m-%d")
+            data = self.get_historical_rate(date, self.base_currency)
+            rate = data.get(currency.upper())
+            if rate:
+                rates.append((date, rate))
+        return rates
+    
+    def plot_rate_trend(self, currency: str, days: int = 7):
+        currency = currency.upper()
+        data = self.list_historical_rates_for_currency(currency, days)
 
-    def list_historical_rates_for_currency(
-        self, currency: str, days: int
-    ) -> list[tuple[str, str]]:
-        """
-        Get the trend of exchange rates for a currency over a specified number of days.
+        if not data:
+            print(f"No historical data found for {currency}.")
+            return
 
-        Args:
-            currency: 3-letter currency code
-            days: Number of days to look back
+        dates = [item[0] for item in data]
+        rates = [item[1] for item in data]
 
-        Returns:
-            A list of tuples, each containing a date and the corresponding rate
-            Tuples are typically used to store pairs of values.
-        """
-        pass
+        import matplotlib.pyplot as plt  # You can also move this to the top
+        plt.plot(dates, rates, marker='o')
+        plt.title(f"{currency} Exchange Rate Trend (Last {days} Days)")
+        plt.xlabel("Date")
+        plt.ylabel("Exchange Rate")
+        plt.xticks(rotation=45)
+        plt.tight_layout()
+        plt.grid(True)
+        plt.show()
